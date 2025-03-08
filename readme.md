@@ -87,7 +87,6 @@ npm start
 
 - ✅ Reads messages from Slack channels.
 - ✅ Stores messages in MongoDB.
-- ✅ Supports public and private channels.
 - ✅ Uses Socket Mode for real-time message listening.
 
 ## 📜 License
