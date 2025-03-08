@@ -89,10 +89,5 @@ npm start
 - ✅ Stores messages in MongoDB.
 - ✅ Uses Socket Mode for real-time message listening.
 
-## 📜 License
-
-This project is licensed under the MIT License.
-
----
 
 **🚀 Ready to build your Slack bot? Start coding!**
