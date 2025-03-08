@@ -85,10 +85,10 @@ npm start
 
 ## 📝 Features
 
-✅ Reads messages from Slack channels\n.
-✅ Stores messages in MongoDB\n.
-✅ Supports public and private channels\n.
-✅ Uses Socket Mode for real-time message listening.
+- ✅ Reads messages from Slack channels.
+- ✅ Stores messages in MongoDB.
+- ✅ Supports public and private channels.
+- ✅ Uses Socket Mode for real-time message listening.
 
 ## 📜 License
 
