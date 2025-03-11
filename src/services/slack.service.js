@@ -22,11 +22,11 @@ app.event("message", async ({ event, client }) => {
         user: event.user,
       });
       console.log("👤 User Info:", userInfo.user.real_name);
+      console.log("🕒 Timestamp:", event.ts);
 
       const classifiedMessage = await classifyLeaveMessage(
         userInfo,
-        event.text,
-        event.ts
+        event.text
       );
 
       const validate = leaveSchema.safeParse(classifiedMessage);

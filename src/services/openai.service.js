@@ -17,37 +17,49 @@ console.log(leaveSchema);
 
 const parser = StructuredOutputParser.fromZodSchema(leaveSchema);
 
-async function classifyLeaveMessage(userInfo, message, timestamp) {
+async function classifyLeaveMessage(userInfo, message) {
+  const currentDate = new Date();
+  const formattedCurrentDate = currentDate.toISOString().split("T")[0]; // YYYY-MM-DD
+  const officeStartTime = "09:00:00";
+  const officeEndTime = "18:00:00";
+  const currentMonth = currentDate.toLocaleString("default", { month: "long" });
   const prompt = `Classify the following message and extract structured data:
   
-  Message: "${message}"
-  Timestamp: ${timestamp}
-  User id: ${userInfo.user.id}
-  User: ${userInfo.user.real_name}
+    Message: "${message}"
+    User id: ${userInfo.user.id}
+    User: ${userInfo.user.real_name}
+    Current Date: ${formattedCurrentDate}
+    Current Month: ${currentMonth}
 
-  **Office Hours**
-  - Start Time: 9:00 AM
-  - End Time: 6:00 PM
+    **Office Hours**
+    - Start Time: ${officeStartTime}
+    - End Time: ${officeEndTime}
   
-  Determine the appropriate classification:
-  - If the message is for working from home/wfh, set is_working_from_home to true.
-  - If the message is for leave, set is_onleave to true.
-  - If the message is for running late that is arriving at certain time which is after start time, set is_running_late to true.
-  - If the message is about being out of office or user is saying ooo which means out of office, set is_out_of_office to true.
-
-  in the case out of office, the start_time will be the timestamp and end_time will be the timestamp + the duration of the out of office mentioned in the 
-  message, if not mentioned don't add start_time and end_time.
-
-  also you should give reason for the classification.
+    **Rules for Classification:**
+    - If the message is about **leave**, set \`is_onleave: true\`.  
+      - If a date is mentioned (e.g., "15th", "March 15th"), extract it.  
+      - If **only the day is mentioned** (e.g., "15th"), assume the **current month and year**.  
+      - If **no date is provided**, assume the **current date** (${formattedCurrentDate}).  
+      - Ensure the final leave day is formatted as **YYYY-MM-DD**.  
+    - If the message is about **running late**, set \`is_running_late: true\`.  
+      - If a time is mentioned (e.g., "arriving at 10 AM"), extract it.  
+      - Ensure the time is after office start time (9:00 AM).  
+    - If the message is about **Work From Home (WFH)**, set \`is_working_from_home: true\`.  
+      - If a specific date is mentioned, use it.  
+      - If no date is given, assume **current date** (${formattedCurrentDate}).  
+    - If the message is about **Out of Office (OOO)**, set \`is_out_of_office: true\`.  
+      - If a duration is mentioned (e.g., "out for 3 hours"), set **start_time = timestamp** and **end_time = timestamp + duration**.  
+      - If no duration is mentioned, do not add start_time and end_time.  
   
-  Return a JSON object with the following structure:
-  ${parser.getFormatInstructions()}`;
+    **Return JSON in this format:**
+    ${parser.getFormatInstructions()}`;
 
   try {
     const response = await chatOpenAI.invoke([
       { role: "user", content: prompt },
     ]);
-    console.log(response.content);
+    console.log("Raw AI Response:", response.content);
+
     const parsed = await parseLeaveMessage(userInfo, message, response.content);
     return parsed;
   } catch (error) {
