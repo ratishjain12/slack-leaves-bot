@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const { z } = require("zod");
 
-export const leaveSchema = z.object({
+const leaveSchema = z.object({
   user: z.string().trim().toLowerCase(),
   original_text: z.string().trim(),
   start_time: z.string().datetime().optional(),
@@ -31,4 +31,7 @@ const messageSchema = new mongoose.Schema(
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
 );
 
-module.exports = mongoose.model("Message", messageSchema);
+module.exports = {
+  leaveSchema,
+  Message: mongoose.model("Message", messageSchema),
+};

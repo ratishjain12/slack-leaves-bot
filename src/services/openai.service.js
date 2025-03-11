@@ -1,7 +1,7 @@
-const { OpenAI } = require("@langchain/openai");
+const { OpenAI, ChatOpenAI } = require("@langchain/openai");
 const { StructuredOutputParser } = require("langchain/output_parsers");
 const { OPENAI_API_KEY } = require("../config/env");
-const { leaveSchema } = require("../models/message.model");
+const { leaveSchema } = require("../models/message.model.js");
 const {
   createOpenAIFunctionsAgent,
   AgentExecutor,
@@ -15,6 +15,8 @@ const chatOpenAI = new ChatOpenAI({
   model: "gpt-4",
   temperature: 0,
 });
+
+console.log(leaveSchema);
 
 const parser = StructuredOutputParser.fromZodSchema(leaveSchema);
 
@@ -56,6 +58,8 @@ async function classifyLeaveMessage(user, message, timestamp) {
 function parseLeaveMessage(user, originalText, rawOutput) {
   try {
     const parsed = parser.parse(rawOutput);
+    console.log(parsed);
+
     return {
       ...parsed,
       user,

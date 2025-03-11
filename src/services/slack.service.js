@@ -1,5 +1,5 @@
 const { App } = require("@slack/bolt");
-const Message = require("../models/message.model");
+const { Message, leaveSchema } = require("../models/message.model");
 const env = require("../config/env");
 const { classifyLeaveMessage } = require("./openai.service");
 
