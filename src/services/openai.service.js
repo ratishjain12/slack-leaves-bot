@@ -7,13 +7,10 @@ const {
   AgentExecutor,
 } = require("langchain/agents");
 
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
-
 const chatOpenAI = new ChatOpenAI({
-  model: "gpt-4",
+  model: "gpt-4o",
   temperature: 0,
+  apiKey: OPENAI_API_KEY,
 });
 
 console.log(leaveSchema);
@@ -25,6 +22,7 @@ async function classifyLeaveMessage(user, message, timestamp) {
   
   Message: "${message}"
   Timestamp: ${timestamp}
+  User: ${user}
 
   **Office Hours**
   - Start Time: 9:00 AM
@@ -38,31 +36,33 @@ async function classifyLeaveMessage(user, message, timestamp) {
 
   in the case out of office, the start_time will be the timestamp and end_time will be the timestamp + the duration of the out of office mentioned in the 
   message, if not mentioned don't add start_time and end_time.
+
+  also you should give reason for the classification.
   
   Return a JSON object with the following structure:
   ${parser.getFormatInstructions()}`;
 
   try {
-    const response = await openai.invoke({
-      model: "gpt-4",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0,
-    });
-    return parseLeaveMessage(user, message, response.content);
+    const response = await chatOpenAI.invoke([
+      { role: "user", content: prompt },
+    ]);
+    console.log(response.content);
+    const parsed = await parseLeaveMessage(user, message, response.content);
+    return parsed;
   } catch (error) {
     console.error("Error classifying message:", error);
     throw new Error("Failed to classify message");
   }
 }
 
-function parseLeaveMessage(user, originalText, rawOutput) {
+async function parseLeaveMessage(user, originalText, rawOutput) {
   try {
-    const parsed = parser.parse(rawOutput);
-    console.log(parsed);
+    const parsed = await parser.parse(rawOutput);
+    console.log("🔍 Parsed:", parsed);
 
     return {
       ...parsed,
-      user,
+      user: user,
       original_text: originalText,
     };
   } catch (error) {

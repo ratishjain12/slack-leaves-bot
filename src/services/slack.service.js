@@ -13,13 +13,18 @@ const app = new App({
 });
 
 // Listen for messages and save them to MongoDB
-app.event("message", async ({ event }) => {
+app.event("message", async ({ event, client }) => {
   try {
     if (!event.subtype) {
       console.log(`📩 Message from ${event.user}: ${event.text}`);
 
+      const userInfo = await client.users.info({
+        user: event.user,
+      });
+      console.log("👤 User Info:", userInfo.user.real_name);
+
       const classifiedMessage = await classifyLeaveMessage(
-        event.user,
+        userInfo.user.real_name,
         event.text,
         event.ts
       );
@@ -30,6 +35,7 @@ app.event("message", async ({ event }) => {
         await new Message(validate.data).save();
       } else {
         console.log("❌ Error validating the json response from openai");
+        console.log(validate.error);
       }
     }
   } catch (error) {
