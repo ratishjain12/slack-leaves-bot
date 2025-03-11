@@ -1,6 +1,7 @@
 const { App } = require("@slack/bolt");
 const Message = require("../models/message.model");
 const env = require("../config/env");
+const { classifyLeaveMessage } = require("./openai.service");
 
 // Initialize Slack App
 const app = new App({
@@ -17,14 +18,19 @@ app.event("message", async ({ event }) => {
     if (!event.subtype) {
       console.log(`📩 Message from ${event.user}: ${event.text}`);
 
-      const newMessage = new Message({
-        user: event.user,
-        text: event.text,
-        ts: event.ts,
-        channel: event.channel,
-      });
+      const classifiedMessage = await classifyLeaveMessage(
+        event.user,
+        event.text,
+        event.ts
+      );
 
-      await newMessage.save();
+      const validate = leaveSchema.safeParse(classifiedMessage);
+
+      if (validate.success) {
+        await new Message(validate.data).save();
+      } else {
+        console.log("❌ Error validating the json response from openai");
+      }
     }
   } catch (error) {
     console.error("❌ Error handling message:", error);
