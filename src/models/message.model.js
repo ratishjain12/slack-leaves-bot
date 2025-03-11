@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const { z } = require("zod");
 
 const leaveSchema = z.object({
+  user_id: z.string().trim().toLowerCase(),
   user: z.string().trim().toLowerCase(),
   original_text: z.string().trim(),
   start_time: z.string().datetime().optional(),
@@ -17,6 +18,7 @@ const leaveSchema = z.object({
 
 const messageSchema = new mongoose.Schema(
   {
+    user_id: { type: String, required: true, trim: true, lowercase: true },
     user: { type: String, required: true, trim: true, lowercase: true },
     original_text: { type: String, required: true, trim: true },
     start_time: { type: Date },

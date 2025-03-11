@@ -24,7 +24,7 @@ app.event("message", async ({ event, client }) => {
       console.log("👤 User Info:", userInfo.user.real_name);
 
       const classifiedMessage = await classifyLeaveMessage(
-        userInfo.user.real_name,
+        userInfo,
         event.text,
         event.ts
       );

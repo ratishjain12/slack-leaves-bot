@@ -17,12 +17,13 @@ console.log(leaveSchema);
 
 const parser = StructuredOutputParser.fromZodSchema(leaveSchema);
 
-async function classifyLeaveMessage(user, message, timestamp) {
+async function classifyLeaveMessage(userInfo, message, timestamp) {
   const prompt = `Classify the following message and extract structured data:
   
   Message: "${message}"
   Timestamp: ${timestamp}
-  User: ${user}
+  User id: ${userInfo.user.id}
+  User: ${userInfo.user.real_name}
 
   **Office Hours**
   - Start Time: 9:00 AM
@@ -47,7 +48,7 @@ async function classifyLeaveMessage(user, message, timestamp) {
       { role: "user", content: prompt },
     ]);
     console.log(response.content);
-    const parsed = await parseLeaveMessage(user, message, response.content);
+    const parsed = await parseLeaveMessage(userInfo, message, response.content);
     return parsed;
   } catch (error) {
     console.error("Error classifying message:", error);
@@ -55,14 +56,15 @@ async function classifyLeaveMessage(user, message, timestamp) {
   }
 }
 
-async function parseLeaveMessage(user, originalText, rawOutput) {
+async function parseLeaveMessage(userInfo, originalText, rawOutput) {
   try {
     const parsed = await parser.parse(rawOutput);
     console.log("🔍 Parsed:", parsed);
 
     return {
       ...parsed,
-      user: user,
+      user_id: userInfo.user.id,
+      user: userInfo.user.real_name,
       original_text: originalText,
     };
   } catch (error) {
