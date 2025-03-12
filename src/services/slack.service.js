@@ -32,7 +32,7 @@ app.event("message", async ({ event, client, say }) => {
       const validate = leaveSchema.safeParse(classifiedMessage);
 
       if (validate.success) {
-        await new Message(validate.data).save();
+        // await new Message(validate.data).save();
       } else {
         console.log("❌ Error validating the json response from openai");
         console.log(validate.error);

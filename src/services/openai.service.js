@@ -1,16 +1,28 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { StructuredOutputParser } from "langchain/output_parsers";
+import {
+  StructuredOutputParser,
+  OutputFixingParser,
+} from "langchain/output_parsers";
 import { env } from "../config/env.js";
 import { leaveSchema } from "../models/message.model.js";
 import { getAttendanceTool } from "../tools/index.js";
 
 const chatOpenAI = new ChatOpenAI({
-  model: "gpt-4o",
-  temperature: 0,
+  model: "gpt-4",
+  temperature: 0.5,
+  apiKey: env.OPENAI_API_KEY,
+});
+
+// Create a second instance with lower temperature for fixing
+const fixerModel = new ChatOpenAI({
+  model: "gpt-4", // You could use 3.5-turbo here if you want to save tokens
+  temperature: 0.1, // Lower temperature for more deterministic fixes
   apiKey: env.OPENAI_API_KEY,
 });
 
 const parser = StructuredOutputParser.fromZodSchema(leaveSchema);
+// Create a fixing parser using OpenAI
+const parserWithFix = OutputFixingParser.fromLLM(fixerModel, parser);
 
 export async function classifyLeaveMessage(userInfo, message) {
   const currentDate = new Date();
@@ -18,6 +30,10 @@ export async function classifyLeaveMessage(userInfo, message) {
   const officeStartTime = "09:00:00";
   const officeEndTime = "18:00:00";
   const currentMonth = currentDate.toLocaleString("default", { month: "long" });
+
+  // Get current timestamp with full precision
+  const currentTimestamp = new Date().toISOString();
+
   const prompt = `Classify the following message and extract structured data:
   
     Message: "${message}"
@@ -25,6 +41,7 @@ export async function classifyLeaveMessage(userInfo, message) {
     User: ${userInfo.user.real_name}
     Current Date: ${formattedCurrentDate}
     Current Month: ${currentMonth}
+    Current Exact Time: ${currentTimestamp}
 
     **Office Hours**
     - Start Time: ${officeStartTime}
@@ -35,7 +52,6 @@ export async function classifyLeaveMessage(userInfo, message) {
       - If a date is mentioned (e.g., "15th", "March 15th"), extract it.  
       - If **only the day is mentioned** (e.g., "15th"), assume the **current month and year**.  
       - If **no date is provided**, assume the **current date** (${formattedCurrentDate}).  
-      - Ensure the final leave day is formatted as **YYYY-MM-DD**.  
     - If the message is about **running late**, set \`is_running_late: true\`.  
       - If a time is mentioned (e.g., "arriving at 10 AM"), extract it.  
       - Ensure the time is after office start time (9:00 AM).  
@@ -45,40 +61,64 @@ export async function classifyLeaveMessage(userInfo, message) {
     - If the message is about **Out of Office (OOO)**, set \`is_out_of_office: true\`.  
       - If a duration is mentioned (e.g., "out for 3 hours"), set **start_time = timestamp** and **end_time = timestamp + duration**.  
       - If no duration is mentioned, do not add start_time and end_time.  
-
+    - Only set leave_day if the message is about leave.
+    
+    **CRITICAL TIMESTAMP FORMATTING INSTRUCTIONS:**
+    1. For the "timestamp" field: ALWAYS use the exact current time "${currentTimestamp}" - do not modify it
+    2. For all date fields (leave_day, etc.): ALWAYS include the timezone "Z" at the end
+    3. NEVER use "T00:00:00" (midnight) for the timestamp field - use the current time
+    
     **Return JSON in this format:**
     ${parser.getFormatInstructions()}
 
-    **Return JSON only, no other text or comments and in correct format.**`;
+    **Example of correctly formatted timestamp:**
+    "timestamp": "${currentTimestamp}"
+
+    **CRITICAL: You must always return valid JSON fenced by a markdown code block. Do not return any additional text.**`;
 
   try {
+    // First attempt with regular parser
     const response = await chatOpenAI.invoke([
       { role: "user", content: prompt },
     ]);
     console.log("Raw AI Response:", response.content);
 
-    const parsed = await parseLeaveMessage(userInfo, message, response.content);
-    return parsed;
+    try {
+      // Try direct parsing first
+      const parsed = await parser.parse(response.content);
+      console.log("Successfully parsed with direct parser:", parsed);
+
+      return {
+        ...parsed,
+        user_id: userInfo.user.id,
+        user: userInfo.user.real_name,
+        original_text: message,
+      };
+    } catch (directParseError) {
+      console.warn(
+        "Direct parsing failed, trying fixing parser:",
+        directParseError
+      );
+
+      try {
+        // Try fixing parser as backup
+        const parsedWithFix = await parserWithFix.parse(response.content);
+        console.log("Successfully parsed with fixing parser:", parsedWithFix);
+
+        return {
+          ...parsedWithFix,
+          user_id: userInfo.user.id,
+          user: userInfo.user.real_name,
+          original_text: message,
+        };
+      } catch (fixParseError) {
+        console.error("Both parsers failed:", fixParseError);
+        throw new Error("Failed to parse message output");
+      }
+    }
   } catch (error) {
     console.error("Error classifying message:", error);
     throw new Error("Failed to classify message");
-  }
-}
-
-async function parseLeaveMessage(userInfo, originalText, rawOutput) {
-  try {
-    const parsed = await parser.parse(rawOutput);
-    console.log("🔍 Parsed:", parsed);
-
-    return {
-      ...parsed,
-      user_id: userInfo.user.id,
-      user: userInfo.user.real_name,
-      original_text: originalText,
-    };
-  } catch (error) {
-    console.error("Error parsing message:", error);
-    throw new Error("Failed to parse message output");
   }
 }
 
