@@ -1,9 +1,9 @@
-const connectDB = require("./config/database");
-const app = require("./services/slack.service");
-const env = require("./config/env");
+import { connectDB } from "./config/database.js";
+import { app } from "./services/slack.service.js";
+import { env } from "./config/env.js";
 
 // Connect to MongoDB
-connectDB();
+await connectDB();
 
 // Start Slack App
 (async () => {
