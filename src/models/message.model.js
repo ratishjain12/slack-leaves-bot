@@ -30,6 +30,7 @@ const messageSchema = new mongoose.Schema(
     is_onleave: { type: Boolean, default: false },
     is_running_late: { type: Boolean, default: false },
     is_out_of_office: { type: Boolean, default: false },
+    is_on_half_day: { type: Boolean, default: false },
     timestamp: { type: String, required: true }, // ✅ Added message timestamp
   },
   { timestamps: { createdAt: "created_at", updatedAt: "updated_at" } }
