@@ -12,6 +12,13 @@ async function getAttendanceRecords({ user_id, filter }) {
     if (filter === "leave") query.is_onleave = true;
     else if (filter === "wfh") query.is_working_from_home = true;
     else if (filter === "late") query.is_running_late = true;
+    else if (filter === "all") {
+      query.$or = [
+        { is_onleave: true },
+        { is_working_from_home: true },
+        { is_running_late: true },
+      ];
+    }
 
     console.log("🔍 Querying DB with:", query); // Add debug log
     const records = await Message.find(query);
@@ -27,14 +34,17 @@ async function getAttendanceRecords({ user_id, filter }) {
 // ✅ Corrected Tool Definition using DynamicStructuredTool
 const getAttendanceTool = new DynamicStructuredTool({
   name: "getAttendance",
-  description: "Retrieve attendance records (leave, WFH, late arrivals).",
+  description:
+    "Retrieve attendance records (leave, WFH, late arrivals). If no filter specified, returns all records.",
 
   schema: z.object({
     user_id: z.string().describe("The Slack user ID of the person"),
     filter: z
-      .enum(["leave", "wfh", "late"])
+      .enum(["leave", "wfh", "late", "all"])
+      .optional()
+      .default("all")
       .describe(
-        "Filter type: 'leave' for leaves, 'wfh' for work from home, 'late' for late arrivals"
+        "Filter type: 'leave' for leaves, 'wfh' for work from home, 'late' for late arrivals, 'all' for everything"
       ),
   }),
 

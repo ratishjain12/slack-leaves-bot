@@ -85,7 +85,7 @@ app.event("message", async ({ event, client, say }) => {
 
     console.log("🔍 Response:", response);
 
-    return await say(`📊 **Attendance Report:**\n${response}`);
+    return await say(response);
   } catch (error) {
     console.error("❌ Error processing attendance query:", error);
   }
