@@ -12,6 +12,7 @@ async function getAttendanceRecords({ user_id, filter }) {
     if (filter === "leave") query.is_onleave = true;
     else if (filter === "wfh") query.is_working_from_home = true;
     else if (filter === "late") query.is_running_late = true;
+    else if (filter === "early") query.is_leaving_early = true;
 
     console.log("🔍 Querying DB with:", query); // Add debug log
     const records = await Message.find(query);
