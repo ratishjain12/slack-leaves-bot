@@ -48,6 +48,8 @@ export async function classifyLeaveMessage(userInfo, message) {
     - End Time: ${officeEndTime}
   
     **Rules for Classification:**
+    - If the message is about **leaving early**, set \`is_leaving_early: true\`.
+      - If a date is mentioned (e.g., "15th", "March 15th"), extract it.
     - If the message is about **leave**, set \`is_onleave: true\`.  
       - If a date is mentioned (e.g., "15th", "March 15th"), extract it.  
       - If **only the day is mentioned** (e.g., "15th"), assume the **current month and year**.  
