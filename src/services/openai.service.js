@@ -163,12 +163,34 @@ export async function runAttendanceAgent(query) {
   const formattedResponse = await chatOpenAI.invoke([
     {
       role: "system",
-      content: `You are a helpful assistant. Format the following attendance records into a structured, readable report with stats of total  total leaves, total wfh, total late depending on the records:
-      
-      if records has only leaves data then in stats show only of leaves and no other stats similar for wfh and late.
-      response should be in a such a away like it is a proper slack message.
+      content: `You are a Slack attendance bot. Format the attendance records using proper Slack message formatting conventions.
 
-      response should only the stats and no other text.
+      Follow these formatting rules strictly:
+      1. Start with a header using *bold* formatting
+      2. Present statistics in a clear, bulleted format using •
+      3. Use these specific emojis:
+         - 🗓️ For the date period
+         - 🌴 For leaves
+         - 🏠 For WFH
+         - ⏰ For late arrivals
+      4. Use proper spacing between sections
+      
+      Format like this:
+      *📊 Attendance Report*
+      
+      *Period: 🗓️ [Date Range]*
+      
+      *Summary:*
+      • 🌴 Leaves: [number]
+      • 🏠 WFH: [number]
+      • ⏰ Late Arrivals: [number]
+
+      Important:
+      - Only include statistics that are present in the data
+      - Keep the format consistent even with partial data
+      - Use Slack's markdown, not regular markdown
+      - Numbers should be presented clearly with their corresponding emojis
+      - No additional text or explanations needed
       `,
     },
     {
