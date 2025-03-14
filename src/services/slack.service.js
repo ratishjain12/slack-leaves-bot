@@ -52,7 +52,12 @@ app.event("message", async ({ event, client, say }) => {
     let query = event.text.replace(/^!query\s*/, "").trim();
     if (!query) {
       return await say(
-        "❌ Please provide a query. Example: `!query @user leave records`"
+        "❌ Please provide a query. Examples:\n" +
+          "• `!query attendance @user` - Get attendance records for a user\n" +
+          "• `!query team trends month wfh` - Get WFH trends for the month\n" +
+          "• `!query team insights` - Get team attendance insights\n" +
+          "• `!query predict @user next monday` - Predict attendance for a user\n" +
+          "• `!query team calendar` - Get team calendar for current month"
       );
     }
 
@@ -63,7 +68,7 @@ app.event("message", async ({ event, client, say }) => {
 
     if (match) {
       user_id = match[1];
-      query = query.replace(mentionRegex, "").trim();
+      query = query.replace(mentionRegex, "@user").trim(); // Replace with @user placeholder for better agent understanding
 
       try {
         const userInfo = await client.users.info({ user: user_id });
@@ -74,20 +79,62 @@ app.event("message", async ({ event, client, say }) => {
       }
     }
 
-    // Modify the query to include User ID if applicable
-    const modifiedQuery = user_id
-      ? `User ID: ${user_id}, Query: ${query}`
-      : query;
+    // Enhance query with context and parameters
+    let enhancedQuery = query;
 
-    console.log("🔍 Modified Query:", modifiedQuery);
+    // Add user_id context if available
+    if (user_id) {
+      enhancedQuery = `${enhancedQuery} (user_id: ${user_id})`;
+    }
 
-    const response = await runAttendanceAgent(modifiedQuery);
+    // Add date context if query contains date references
+    const dateKeywords = [
+      "today",
+      "tomorrow",
+      "yesterday",
+      "next week",
+      "this month",
+      "last month",
+    ];
+    const monthNames = [
+      "january",
+      "february",
+      "march",
+      "april",
+      "may",
+      "june",
+      "july",
+      "august",
+      "september",
+      "october",
+      "november",
+      "december",
+    ];
 
-    console.log("🔍 Response:", response);
+    // Check for date references in the query
+    const hasDateReference =
+      dateKeywords.some((keyword) => query.toLowerCase().includes(keyword)) ||
+      monthNames.some((month) => query.toLowerCase().includes(month));
 
+    if (hasDateReference) {
+      const currentDate = new Date();
+      enhancedQuery = `${enhancedQuery} (current date: ${
+        currentDate.toISOString().split("T")[0]
+      })`;
+    }
+
+    console.log("🔍 Enhanced Query:", enhancedQuery);
+
+    // Process the query with the AI agent and get the formatted response
+    const response = await runAttendanceAgent(enhancedQuery);
+
+    // Send the response directly to Slack
     return await say(response);
   } catch (error) {
     console.error("❌ Error processing attendance query:", error);
+    await say(
+      "❌ Sorry, I encountered an error processing your query. Please try again."
+    );
   }
 });
 
