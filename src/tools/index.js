@@ -2,6 +2,7 @@
 import { DynamicStructuredTool } from "@langchain/core/tools";
 import { z } from "zod";
 import { Message } from "../models/message.model.js";
+import { generateAndSendAttendanceCSV } from "../helpers/csv-helpers.js";
 
 // Function to fetch attendance records
 async function getAttendanceRecords({ user_id, filter, date }) {
@@ -100,7 +101,7 @@ const getAttendanceTool = new DynamicStructuredTool({
         "The Slack user ID of the person. If not provided, returns records for all users."
       ),
     filter: z
-      .enum(["leave", "wfh", "late", "early", "all"])
+      .enum(["leave", "wfh", "late", "early", "all", "early"])
       .optional()
       .default("all")
       .describe(
@@ -121,7 +122,7 @@ const getAttendanceTool = new DynamicStructuredTool({
 });
 
 // Function to generate attendance trends over time
-async function getAttendanceTrends({ period = "month", type }) {
+async function getAttendanceTrends({ period = "month", type, channel_id }) {
   try {
     // Calculate date range based on period
     const now = new Date();
@@ -260,19 +261,44 @@ async function getAttendanceTrends({ period = "month", type }) {
       {
         $group: {
           _id: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: "$timestampDate",
+            date: {
+              $dateToString: { format: "%Y-%m-%d", date: "$timestampDate" },
+            },
+            category: {
+              $cond: [
+                { $eq: ["$is_onleave", true] },
+                "leave",
+                {
+                  $cond: [
+                    { $eq: ["$is_working_from_home", true] },
+                    "wfh",
+                    {
+                      $cond: [
+                        { $eq: ["$is_running_late", true] },
+                        "late",
+                        {
+                          $cond: [
+                            { $eq: ["$is_leaving_early", true] },
+                            "early",
+                            "unknown",
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
             },
           },
           count: { $sum: 1 },
         },
       },
-      { $sort: { _id: 1 } },
+      { $sort: { "_id.date": 1 } },
       {
         $project: {
           _id: 0,
-          date: "$_id",
+          date: "$_id.date",
+          category: "$_id.category",
           count: 1,
         },
       },
@@ -283,7 +309,19 @@ async function getAttendanceTrends({ period = "month", type }) {
     // Execute the aggregation
     const trends = await Message.aggregate(pipeline);
 
+    console.log("trends", JSON.stringify(trends, null, 2));
     console.log(`Found ${trends.length} trend data points`);
+
+    // generateCSV
+    const csvDataFormat = (record) => {
+      return {
+        Date: record.date,
+        Category: record.category,
+        Count: record.count,
+      };
+    };
+
+    await generateAndSendAttendanceCSV(trends, csvDataFormat, channel_id);
 
     return {
       period: periodDescription,
@@ -300,7 +338,7 @@ async function getAttendanceTrends({ period = "month", type }) {
 }
 
 // Function to get team member insights
-async function getTeamInsights() {
+async function getTeamInsights({ channel_id }) {
   try {
     // Get current month
     const now = new Date();
@@ -336,6 +374,7 @@ async function getTeamInsights() {
         $group: {
           _id: "$user_id",
           userName: { $first: "$user" },
+          original_text: { $first: "$original_text" },
           totalEvents: { $sum: 1 },
           leaveCount: {
             $sum: { $cond: [{ $eq: ["$is_onleave", true] }, 1, 0] },
@@ -356,6 +395,7 @@ async function getTeamInsights() {
         $project: {
           _id: 0,
           user_id: "$_id",
+          original_text: 1,
           userName: 1,
           totalEvents: 1,
           leaveCount: 1,
@@ -367,6 +407,21 @@ async function getTeamInsights() {
     ];
 
     const userStats = await Message.aggregate(pipeline);
+
+    // generate CSV
+    const csvDataFormat = (record) => {
+      return {
+        user_id: record.user_id,
+        userName: record.userName,
+        totalEvents: record.totalEvents,
+        leaveCount: record.leaveCount,
+        wfhCount: record.wfhCount,
+        lateCount: record.lateCount,
+        earlyCount: record.earlyCount,
+      };
+    };
+
+    await generateAndSendAttendanceCSV(userStats, csvDataFormat, channel_id);
 
     // Calculate team-wide statistics
     const teamStats = {
@@ -617,20 +672,22 @@ const getAttendanceTrendsTool = new DynamicStructuredTool({
       .default("month")
       .describe("Time period to analyze: week, month, or quarter"),
     type: z
-      .enum(["leave", "wfh", "late"])
+      .enum(["leave", "wfh", "late", "all", "early"])
       .optional()
       .describe(
         "Type of attendance to analyze: leave, wfh, late, or all types if not specified"
       ),
+    channel_id: z.string().optional().describe("Channel ID to send data"),
   }),
-  func: async ({ period, type }) => {
+  func: async ({ period, type, channel_id }) => {
     console.log(
       "📊 Analyzing attendance trends for period:",
       period,
       "type:",
-      type
+      type,
+      channel_id
     );
-    return await getAttendanceTrends({ period, type });
+    return await getAttendanceTrends({ period, type, channel_id });
   },
 });
 
@@ -639,10 +696,12 @@ const getTeamInsightsTool = new DynamicStructuredTool({
   name: "getTeamInsights",
   description:
     "Get comprehensive insights about team attendance patterns for the current month.",
-  schema: z.object({}), // No parameters needed
-  func: async () => {
-    console.log("🔍 Generating team insights");
-    return await getTeamInsights();
+  schema: z.object({
+    channel_id: z.string().optional().describe("Channel ID to send data"),
+  }), // No parameters needed
+  func: async ({ channel_id }) => {
+    console.log("🔍 Generating team insights", channel_id);
+    return await getTeamInsights({ channel_id });
   },
 });
 
