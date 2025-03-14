@@ -148,8 +148,8 @@ const toolsByName = {
   getTeamCalendar: getTeamCalendarTool,
 };
 
-export async function runAttendanceAgent(query) {
-  console.log("🔍 Running attendance agent with query:", query);
+export async function runAttendanceAgent(query, channel) {
+  console.log("🔍 Running attendance agent with query:", query, channel);
 
   // Create a system message that helps the model understand how to use the tools
   const systemMessage = {
@@ -165,6 +165,12 @@ You have access to several tools:
 
 Based on the user's query, select the most appropriate tool and provide the parameters it needs. 
 
+*** Important: ***
+If any date has been received in terms of yesterday, today, tomorrow, next week, etc., take reference from the current date with GMT +5:30 and please convert it to the actual date in YYYY-MM-DD format in args before using it in the tools, also same for days.
+
+*** Important: ***
+Please note that do not respond with text content always respond with tool structure output.
+
 Common query patterns and the tools to use:
 - "Who's on leave today?" → getAttendance with filter="leave" and no user_id
 - "Who's leaving early today?" → getAttendance with filter="early" and no user_id
@@ -174,7 +180,8 @@ Common query patterns and the tools to use:
 - "Will @user be in office next Monday?" → predictAttendance with user_id and date
 - "Show me the team calendar for November" → getTeamCalendar with month="11"
 
-Always try to extract parameters from the query. If a user mentions a specific person with @user, use their user_id. If they mention a time period, use that for date ranges. If they ask about "who" without specifying a user, assume they want information for all users.`,
+Always try to extract parameters from the query. If a user mentions a specific person with @user, use their user_id. If they mention a time period, use that for date ranges. If they ask about "who" without specifying a user, assume they want information for all users.
+`,
   };
 
   // Invoke the agent with the system message and user query
@@ -196,6 +203,18 @@ Always try to extract parameters from the query. If a user mentions a specific p
           `🛠️ Executing tool: ${toolCall.name} with args`,
           toolCall.args
         );
+
+        const args = toolCall.args;
+
+        // add channel to the args
+        if (
+          toolCall.name === "getTeamInsights" ||
+          toolCall.name === "getAttendanceTrends"
+        ) {
+          args.channel_id = channel || undefined;
+        }
+
+        console.log("🛠️ Executing tool:", args);
 
         const toolResponse = await selectedTool.invoke(toolCall.args);
         console.log(`📊 Raw Tool Response for ${toolCall.name}:`, toolResponse);
@@ -316,4 +335,37 @@ async function formatToolResponse(rawResponses) {
 
   console.log("📌 AI-Formatted Response:", formattingResponse.content);
   return formattingResponse.content || "❌ Failed to format the response.";
+}
+
+export async function classifyMessageType(message) {
+  const classificationPrompt = `
+  Classify the following message into one of three categories:
+  1. "leave" - If the message is about leave, working from home, arriving late, leaving early, afk, away from keyboard or out of office.
+  2. attendance_query - If the message is requesting any kind of reports, trends, insight data or any message related analytics or information for example, who's on leave today?, who's leaving early today?, "show me @user's attendance
+  for today, what are the WFH trends this month, show me attendance for March 15th, will @user be in office next Monday, show me the team calendar for November etc...".
+  3. "normal" - If the message is unrelated to leave or attendance.
+
+  Message: "${message}"
+
+  Respond with ONLY one of the following: "leave", "attendance_query", or "normal".
+  `;
+
+  try {
+    const response = await chatOpenAI.invoke([
+      { role: "system", content: classificationPrompt },
+    ]);
+
+    const classification = response.content.trim().toLowerCase();
+
+    console.log("classification", classification);
+
+    if (["leave", "attendance_query", "normal"].includes(classification)) {
+      return classification;
+    }
+
+    return "normal"; // Default to normal if classification fails
+  } catch (error) {
+    console.error("❌ Error classifying message:", error);
+    return "normal"; // Default to normal on failure
+  }
 }

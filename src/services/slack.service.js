@@ -1,7 +1,11 @@
 import pkg from "@slack/bolt";
 import { Message, leaveSchema } from "../models/message.model.js";
 import { env } from "../config/env.js";
-import { classifyLeaveMessage, runAttendanceAgent } from "./openai.service.js";
+import {
+  classifyLeaveMessage,
+  classifyMessageType,
+  runAttendanceAgent,
+} from "./openai.service.js";
 
 // Initialize Slack App
 const app = new pkg.App({
@@ -14,34 +18,42 @@ const app = new pkg.App({
 
 // Listen for messages and save them to MongoDB
 app.event("message", async ({ event, client, say }) => {
-  try {
-    if (!event.subtype && !event.text.startsWith("!query")) {
-      console.log(`📩 Message from ${event.user}: ${event.text}`);
+  console.log("event", event.channel);
+  const messageType = await classifyMessageType(event.text);
 
-      const userInfo = await client.users.info({
-        user: event.user,
-      });
-      console.log("👤 User Info:", userInfo.user.real_name);
-      console.log("🕒 Timestamp:", event.ts);
-
-      const classifiedMessage = await classifyLeaveMessage(
-        userInfo,
-        event.text
-      );
-
-      const validate = leaveSchema.safeParse(classifiedMessage);
-
-      if (validate.success) {
-        // await new Message(validate.data).save();
-      } else {
-        console.log("❌ Error validating the json response from openai");
-        console.log(validate.error);
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error handling message:", error);
+  if (messageType !== "leave" && !event.text.startsWith("!query")) {
+    return;
   }
 
+  if (messageType === "leave") {
+    try {
+      if (!event.subtype) {
+        console.log(`📩 Message from ${event.user}: ${event.text}`);
+
+        const userInfo = await client.users.info({
+          user: event.user,
+        });
+        console.log("👤 User Info:", userInfo.user.real_name);
+        console.log("🕒 Timestamp:", event.ts);
+
+        const classifiedMessage = await classifyLeaveMessage(
+          userInfo,
+          event.text
+        );
+
+        const validate = leaveSchema.safeParse(classifiedMessage);
+
+        if (validate.success) {
+          await new Message(validate.data).save();
+        } else {
+          console.log("❌ Error validating the json response from openai");
+          console.log(validate.error);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error handling message:", error);
+    }
+  }
   try {
     // Ensure the message starts with !query
     if (!event.text.startsWith("!query")) {
@@ -49,7 +61,7 @@ app.event("message", async ({ event, client, say }) => {
     }
 
     // Extract query by removing "!query" from the beginning
-    let query = event.text.replace(/^!query\s*/, "").trim();
+    let query = event.text;
     if (!query) {
       return await say(
         "❌ Please provide a query. Examples:\n" +
@@ -95,6 +107,8 @@ app.event("message", async ({ event, client, say }) => {
       "next week",
       "this month",
       "last month",
+      "last week",
+      "this week",
     ];
     const monthNames = [
       "january",
@@ -126,8 +140,9 @@ app.event("message", async ({ event, client, say }) => {
     console.log("🔍 Enhanced Query:", enhancedQuery);
 
     // Process the query with the AI agent and get the formatted response
-    const response = await runAttendanceAgent(enhancedQuery);
+    const response = await runAttendanceAgent(enhancedQuery, event.channel);
 
+    console.log("response for slack", response);
     // Send the response directly to Slack
     return await say(response);
   } catch (error) {
