@@ -186,11 +186,7 @@ You have access to several tools:
 
 Based on the user's query, select the most appropriate tool and provide the parameters it needs. 
 
-*** Important: ***
-If any date has been received in terms of yesterday, today, tomorrow, next week, etc., take reference from the current date with GMT +5:30 and please convert it to the actual date in YYYY-MM-DD format in args before using it in the tools, also same for days.
 
-*** Important: ***
-Please note that do not respond with text content always respond with tool structure output.
 
 Common query patterns and the tools to use:
 - "Who's on leave today?" → getAttendance with filter="leave" and no user_id
