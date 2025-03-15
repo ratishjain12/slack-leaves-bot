@@ -56,19 +56,40 @@ export async function classifyLeaveMessage(userInfo, message) {
     **Rules for Classification:**
     - If the message is about **leaving early**, set \`is_leaving_early: true\`.
       - If a date is mentioned (e.g., "15th", "March 15th"), extract it.
+      - Detect phrases like "leaving early", "ducking out early", "heading out ahead of schedule", "taking off early", 
+        "cutting out early", "slipping away early", "making an early exit", "departing before the usual time", 
+        "clocking out early", "knocking off early", "heading home early", "calling it a day early", "wrapping up early", 
+        "stepping out before closing time", "bowing out early".
     - If the message is about **leave**, set \`is_onleave: true\`.  
       - If a date is mentioned (e.g., "15th", "March 15th"), extract it.  
       - If **only the day is mentioned** (e.g., "15th"), assume the **current month and year**.  
       - If **no date is provided**, assume the **current date** (${formattedCurrentDate}).  
+      - Detect phrases like:
+        - **Casual phrases:** "taking leave", "on leave", "off work", "off for the day", "taking the day off", "out for the day", "off duty".
+        - **Formal phrases:** "on vacation", "annual leave", "personal leave", "paid time off", "unavailable today", "leave of absence".
+        - **Sick leave:** "on sick leave", "calling in sick", "not feeling well today", "taking a sick day", "medical leave".
+        - **Miscellaneous:** "won't be in", "not coming to work", "skipping work", "not showing up today", "out of the office for the day".
     - If the message is about **running late**, set \`is_running_late: true\`.  
-      - If a time is mentioned (e.g., "arriving at 10 AM"), extract it.  
+      - If a time is mentioned (e.g., "arriving at 10 AM", "reaching by 9:45"), extract it.  
+      - Synonyms: "getting late", "delayed", "stuck in traffic", "arriving late", "held up", "reaching late", "coming in late", "won't make it on time".
+      - Detect phrases like:
+        - **Common phrases:** "running late", "getting late", "coming in late", "arriving late", "reaching late", "won't make it on time", "delayed".
+        - **Traffic-related:** "stuck in traffic", "held up in traffic", "caught in congestion", "heavy traffic", "slow commute".
+        - **Transportation issues:** "missed the bus", "missed my train", "train delay", "subway delay", "car broke down", "waiting for Uber".
+        - **General excuses:** "held up", "got caught up", "got delayed", "something came up", "taking longer than expected", "won't be on time".
       - Ensure the time is after office start time (9:00 AM).  
     - If the message is about **Work From Home (WFH)**, set \`is_working_from_home: true\`.  
       - If a specific date is mentioned, use it.  
       - If no date is given, assume **current date** (${formattedCurrentDate}).  
     - If the message is about **Out of Office (OOO)**, set \`is_out_of_office: true\`.  
       - If a duration is mentioned (e.g., "out for 3 hours"), set **start_time = timestamp** and **end_time = timestamp + duration**.  
-      - If no duration is mentioned, do not add start_time and end_time.  
+      - Detect phrases like:
+        - **Common phrases:** "out of office", "OOO", "not in office", "away from office", "stepping out", "out for a while", "afk", "taking a break", "on tea break", "away from keyboard".
+        - **Meeting-related:** "attending a meeting", "in a client meeting", "offsite meeting", "in an external meeting".
+        - **Work errands:** "on a work trip", "traveling for work", "business travel", "visiting a client", "site visit".
+        - **Personal reasons:** "out for an appointment", "running an errand", "stepping out for a while", "won't be at my desk".
+        - **Unavailable due to events:** "offsite training", "conference day", "attending a seminar", "out for an event".
+      - If no duration is mentioned, do not add start_time and end_time.
     - Only set leave_day if the message is about leave.
     
     **CRITICAL TIMESTAMP FORMATTING INSTRUCTIONS:**
