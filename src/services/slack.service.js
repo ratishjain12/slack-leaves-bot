@@ -1,7 +1,11 @@
 import pkg from "@slack/bolt";
 import { Message, leaveSchema } from "../models/message.model.js";
 import { env } from "../config/env.js";
-import { classifyLeaveMessage, runAttendanceAgent } from "./openai.service.js";
+import {
+  classifyLeaveMessage,
+  classifyMessageType,
+  runAttendanceAgent,
+} from "./openai.service.js";
 
 // Initialize Slack App
 const app = new pkg.App({
@@ -14,34 +18,42 @@ const app = new pkg.App({
 
 // Listen for messages and save them to MongoDB
 app.event("message", async ({ event, client, say }) => {
-  try {
-    if (!event.subtype && !event.text.startsWith("!query")) {
-      console.log(`📩 Message from ${event.user}: ${event.text}`);
+  console.log("event", event.channel);
+  const messageType = await classifyMessageType(event.text);
 
-      const userInfo = await client.users.info({
-        user: event.user,
-      });
-      console.log("👤 User Info:", userInfo.user.real_name);
-      console.log("🕒 Timestamp:", event.ts);
-
-      const classifiedMessage = await classifyLeaveMessage(
-        userInfo,
-        event.text
-      );
-
-      const validate = leaveSchema.safeParse(classifiedMessage);
-
-      if (validate.success) {
-        await new Message(validate.data).save();
-      } else {
-        console.log("❌ Error validating the json response from openai");
-        console.log(validate.error);
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error handling message:", error);
+  if (messageType !== "leave" && !event.text.startsWith("!query")) {
+    return;
   }
 
+  if (messageType === "leave") {
+    try {
+      if (!event.subtype) {
+        console.log(`📩 Message from ${event.user}: ${event.text}`);
+
+        const userInfo = await client.users.info({
+          user: event.user,
+        });
+        console.log("👤 User Info:", userInfo.user.real_name);
+        console.log("🕒 Timestamp:", event.ts);
+
+        const classifiedMessage = await classifyLeaveMessage(
+          userInfo,
+          event.text
+        );
+
+        const validate = leaveSchema.safeParse(classifiedMessage);
+
+        if (validate.success) {
+          await new Message(validate.data).save();
+        } else {
+          console.log("❌ Error validating the json response from openai");
+          console.log(validate.error);
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error handling message:", error);
+    }
+  }
   try {
     // Ensure the message starts with !query
     if (!event.text.startsWith("!query")) {
@@ -49,10 +61,15 @@ app.event("message", async ({ event, client, say }) => {
     }
 
     // Extract query by removing "!query" from the beginning
-    let query = event.text.replace(/^!query\s*/, "").trim();
+    let query = event.text;
     if (!query) {
       return await say(
-        "❌ Please provide a query. Example: `!query @user leave records`"
+        "❌ Please provide a query. Examples:\n" +
+          "• `!query attendance @user` - Get attendance records for a user\n" +
+          "• `!query team trends month wfh` - Get WFH trends for the month\n" +
+          "• `!query team insights` - Get team attendance insights\n" +
+          "• `!query predict @user next monday` - Predict attendance for a user\n" +
+          "• `!query team calendar` - Get team calendar for current month"
       );
     }
 
@@ -63,7 +80,7 @@ app.event("message", async ({ event, client, say }) => {
 
     if (match) {
       user_id = match[1];
-      query = query.replace(mentionRegex, "").trim();
+      query = query.replace(mentionRegex, "@user").trim(); // Replace with @user placeholder for better agent understanding
 
       try {
         const userInfo = await client.users.info({ user: user_id });
@@ -74,20 +91,65 @@ app.event("message", async ({ event, client, say }) => {
       }
     }
 
-    // Modify the query to include User ID if applicable
-    const modifiedQuery = user_id
-      ? `User ID: ${user_id}, Query: ${query}`
-      : query;
+    // Enhance query with context and parameters
+    let enhancedQuery = query;
 
-    console.log("🔍 Modified Query:", modifiedQuery);
+    // Add user_id context if available
+    if (user_id) {
+      enhancedQuery = `${enhancedQuery} (user_id: ${user_id})`;
+    }
 
-    const response = await runAttendanceAgent(modifiedQuery);
+    // Add date context if query contains date references
+    const dateKeywords = [
+      "today",
+      "tomorrow",
+      "yesterday",
+      "next week",
+      "this month",
+      "last month",
+      "last week",
+      "this week",
+    ];
+    const monthNames = [
+      "january",
+      "february",
+      "march",
+      "april",
+      "may",
+      "june",
+      "july",
+      "august",
+      "september",
+      "october",
+      "november",
+      "december",
+    ];
 
-    console.log("🔍 Response:", response);
+    // Check for date references in the query
+    const hasDateReference =
+      dateKeywords.some((keyword) => query.toLowerCase().includes(keyword)) ||
+      monthNames.some((month) => query.toLowerCase().includes(month));
 
+    if (hasDateReference) {
+      const currentDate = new Date();
+      enhancedQuery = `${enhancedQuery} (current date: ${
+        currentDate.toISOString().split("T")[0]
+      })`;
+    }
+
+    console.log("🔍 Enhanced Query:", enhancedQuery);
+
+    // Process the query with the AI agent and get the formatted response
+    const response = await runAttendanceAgent(enhancedQuery, event.channel);
+
+    console.log("response for slack", response);
+    // Send the response directly to Slack
     return await say(response);
   } catch (error) {
     console.error("❌ Error processing attendance query:", error);
+    await say(
+      "❌ Sorry, I encountered an error processing your query. Please try again."
+    );
   }
 });
 
